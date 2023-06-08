@@ -1,0 +1,315 @@
+
+var Environment = [
+    {
+        mode: "Dev",
+        cssClass: "dev-env",
+    },
+    {
+        mode: "Production",
+        cssClass: "prod-env",
+    }
+];
+
+var dashboard = {
+    getEnvironmentSettings(environmentName) {
+        var filterdEnvMode = Environment.filter(function (env) {
+            return env.mode.toLowerCase() === environmentName.toLowerCase();
+        });
+        return filterdEnvMode.length > 0 ? filterdEnvMode[0] : Environment[0];
+    },
+    setStylesBasedOnEnvironment(environmentName) {
+        var envSettings = this.getEnvironmentSettings(environmentName);
+        $("#landingPage").addClass(envSettings.cssClass);
+    }
+};
+
+var randomColorGenerator = {
+    colors: [
+        "#AB4011",
+        "#FF1C1C",
+        "#F8FF4F",
+        "#4CFF40",
+        "#54E2FF",
+        "#FF4AE6",
+        "#A020F0"
+    ],
+
+    pickSelectedColor() {
+        return this.colors[Math.floor(Math.random() * this.colors.length)];
+    },
+
+    generateRandomColor() {
+        var letters = '0123456789ABCDEF';
+        var color = '#';
+        for (var i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+    }
+};
+
+var displayAnnouncement =
+{
+    announcements: [],
+    index: 0,
+    noofAnnouncementstoDisplay: 3,
+
+    loadPrevious() {
+        if (this.index > 0) {
+            this.index = this.index - this.noofAnnouncementstoDisplay;
+        }
+        this.displayAnnouncements();
+    },
+
+    loadNext() {
+        if (this.index < this.announcements.length - this.noofAnnouncementstoDisplay) {
+            this.index = this.index + this.noofAnnouncementstoDisplay;
+        }
+        this.displayAnnouncements();
+    },
+
+    async loadAllAnnouncements() {
+        try {
+          
+            const response = await fetch("/api/dashboard/announcements");
+
+            if (!response || (!!response && !response.ok))
+                throw new Error("Failed to fetch data");
+
+            const announcements = await response.json();
+
+            var screenWidth = screen.width;
+            this.noofAnnouncementstoDisplay = screenWidth < 780 ? 1 : screenWidth < 1000 ? 2 : 3;
+            const arrayOfObjects = Object.values(announcements); //Converting object to array
+            arrayOfObjects.sort((a, b) => new Date(b.CreatedOn) - new Date(a.CreatedOn)); //Sorting the announcements
+            this.announcements = arrayOfObjects;
+            this.noofAnnouncementstoDisplay = announcements.length > this.noofAnnouncementstoDisplay ? this.noofAnnouncementstoDisplay : announcements.length;
+            this.displayAnnouncements();
+            this.displayAllAnnouncements();
+        } catch (error) {
+            console.log("An error occurred while fetching data:", error);
+        } 
+    },
+
+    displayAnnouncements() {
+        var htmlString = "";
+        var styleclass = "";
+        var noofAnnouncements = this.announcements.length - this.index;
+        if (noofAnnouncements > 3) {
+            styleclass = 'col-lg-4'
+        }
+        else if (noofAnnouncements === 2) {
+            styleclass = 'col-lg-6'
+        }
+        else if (noofAnnouncements === 1) {
+            styleclass = 'col-lg-12'
+        }
+        else {
+            styleclass = 'col-lg-4'
+        }
+        if (this.announcements.length > 0) {
+            for (i = this.index; (i < this.index + this.noofAnnouncementstoDisplay) && (i < this.announcements.length); i++) {
+                htmlString += this.generateAnnouncementHtml(this.announcements[i], i, styleclass);
+            }
+        } else {
+            var htmlString = $("<label class='empty-container'>No Announcements to display</lable>");
+        }
+        $("#announcement").html(htmlString);
+        if (this.index == 0) {
+            $("#loadPrevious").addClass("disable")
+            $("#loadNext").removeClass("disable")
+        } else if (this.index === this.announcements.length - this.noofAnnouncementstoDisplay) {
+            $("#loadPrevious").removeClass("disable")
+            $("#loadNext").addClass("disable")
+        } else {
+            $("#loadPrevious").removeClass("disable")
+            $("#loadNext").removeClass("disable")
+        }
+
+    },
+
+    generateAnnouncementHtml(announcement, index, styleclass) {
+        var htmlString = "";
+        var newLabel = "";
+        var spanNewLabel = "";
+        if (new Date(new Date(announcement.CreatedOn).setHours(0, 0, 0, 0)) >= new Date(new Date().setHours(0, 0, 0, 0))) {
+            newLabel = "<label class='new-label'>New</label>";
+            //spanNewLabel = "<span class='glyphicon glyphicon-certificate new-announcement-icon'></span>";
+        }
+        var title = "<label>" + announcement.Title + spanNewLabel + "</label>";
+        var loading = "<h1>Loading...</h1>";
+        var description = announcement.Description;
+        var createdBy = "<label class='announcement-by'>" + announcement.CreatedBy + "</label>";
+        var createdOn = "<label class='announcement-date'> " + this.getFormattedDate(announcement?.CreatedOn) + "</label>";
+        var readMoreLabel = "";
+        const plainDescription = this.htmlToText(description);
+        readMoreLabel = description != null && description != undefined && description.length > 10 ? ("<span class='text-center cursor-pointer read-more' data-toggle='modal' data-target='#myAnnouncement' onclick='displayAnnouncement.getModalElement(" + index + "); '> Read More </span> ") : ("<span class='text-center read-more'>&nbsp;&nbsp</span>");
+        if (!announcement) {
+            return loading
+        }
+        return (` <div class='${styleclass} col-sm-12 col-md-6 allAnnouncementStyler pl-0 margin'><div class='announcement pl-0' >` + "<div class='announcement-details'><div class='title'>" + title + "<label>-</label>" + createdOn + '<br />' + "</div><div class='announcement-description'>" + plainDescription + "</div>" + "</div></div>" + readMoreLabel + "</div>");
+    },
+
+    getFormattedDate(date) {
+        let months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+        var todayTime = new Date(date);
+        var month = (todayTime.getMonth());
+        var day = (todayTime.getDate());
+        var year = (todayTime.getFullYear());
+        return `${months[month]} ${day}, ${year}`
+    },
+
+    getModalElement(index) {
+        var announcement = this.announcements[index];
+        var description = announcement.Description;
+        if ((description != null && description != undefined && description.length > 10) === false) {
+            return;
+        }
+        $("#selectedAnnouncementTitle").text(announcement.Title);
+        var headerSection = "<div class='header-section'><img src='" + announcement.ImgUrl + "'/>" + "</div>";
+        var titleSection = "<div class='title-section text-center'><div>" + announcement.Title + "</div></div>";
+        var subTitleSection = "<div class='sub-title-section text-center'><div><span class='glyphicon glyphicon-user'></span><span>" + announcement.CreatedBy + "</span></div><div><span class='glyphicon glyphicon-calendar'></span><span>" + announcement.CreatedOn + "</span></div></div>"
+        var contentSection = `<div class='content-section ${typeof announcement.ImgUrl === 'undefined' || announcement.ImgUrl === "" ? "content-section-height" : ""}'> ${description} </div>`;
+        var footerSection = `<div class="text-right"><button class="btn btn-secondary" style="color: black;" onclick='displayAnnouncement.closeModalElement();'>Close</button></div>`;
+        var body = "";
+        if (typeof announcement.ImgUrl === 'undefined' || announcement.ImgUrl === "") {
+            body = titleSection + subTitleSection + contentSection + footerSection;
+            var modalContent = document.querySelector(".modal-content");
+            modalContent.classList.add("modal-content-height");
+        }
+        else {
+            body = headerSection + titleSection + subTitleSection + contentSection + footerSection;
+        }
+        $("#selectedAnnouncementBody").html(body);
+        $("#myAnnouncement").addClass("showannouncement-details");
+        $("#selectedAnnouncementAuthor").text(announcement.CreatedBy);
+        $('body').addClass("overflow-hidden");
+    },
+
+    getModalElementPopup(index) {
+        var announcement = this.announcements[index];
+        var description = announcement.Description;
+        if ((description != null && description != undefined && description.length > 10) === false) {
+            return;
+        }
+        $("#selectedAnnouncementTitle").text(announcement.Title);
+        var headerSection = "<div class='header-section'><img src='" + announcement.ImgUrl + "'/>" + "</div>";
+        var titleSection = "<div class='title-section text-center'><div>" + announcement.Title + "</div></div>";
+        var subTitleSection = "<div class='sub-title-section text-center'><div><span class='glyphicon glyphicon-user'></span><span>" + announcement.CreatedBy + "</span></div><div><span class='glyphicon glyphicon-calendar'></span><span>" + announcement.CreatedOn + "</span></div></div>"
+        var contentSection = `<div class='content-section ${typeof announcement.ImgUrl === 'undefined' || announcement.ImgUrl === "" ? "content-section-height" : ""}'> ${description} </div>`;
+        var footerSection = `<div id="closeButton" class="text-right"><button class="btn btn-secondary" style="color: black;" onclick='displayAnnouncement.closeModalElementPopup();'>Close</button></div>`;
+        var body = "";
+        if (typeof announcement.ImgUrl === 'undefined' || announcement.ImgUrl === "") {
+            body = titleSection + subTitleSection + contentSection + footerSection;
+            var modalContent = document.querySelector(".modal-content");
+            modalContent.classList.add("modal-content-height");
+        }
+        else {
+            body = headerSection + titleSection + subTitleSection + contentSection + footerSection;
+        }
+        $("#selectedAnnouncementBody").html(body);
+        $("#myAnnouncement").addClass("showannouncement-details");
+        $("#selectedAnnouncementAuthor").text(announcement.CreatedBy);
+        $('body').addClass("overflow-hidden");
+    },
+
+    generateAnnouncementHtmlPopup(announcement, index, styleclass) {
+        var newLabel = "";
+        var spanNewLabel = "";
+        const imgUrl = announcement?.ImgUrl;
+
+        if (new Date(new Date(announcement?.CreatedOn).setHours(0, 0, 0, 0)) >= new Date(new Date().setHours(0, 0, 0, 0))) {
+            newLabel = "<label class='new-label'>New</label>";
+            //spanNewLabel = "<span class='glyphicon glyphicon-certificate new-announcement-icon'></span>";
+        }
+        var title = "<label>" + announcement.Title + spanNewLabel + "</label>";
+        var description = announcement?.Description;
+
+        var createdOn = "<label class='announcement-date'> " + this.getFormattedDate(announcement?.CreatedOn) + "</label>";
+
+
+        var readMoreLabel = "";
+        readMoreLabel = description != null && description != undefined && description.length > 10 ? ("<span class='cursor-pointer read-more' data-toggle='modal' data-target='#myAnnouncement' onclick='displayAnnouncement.getModalElementPopup(" + index + "); '> Read More </span> ") : ("<span class='text-center read-more'>&nbsp;&nbsp</span>");
+
+        const plainDescription = this.htmlToText(description);
+        const myHTML = (`<div class='display-flex announcement-inner-container max-height-200px'><div class='col-sm-3 pl-0 position-relative'><div class='image'><img class='w-100 ${!imgUrl ? 'd-none' : ''}' src='${imgUrl}'></img></div>${!imgUrl ? "<span class='glyphicon glyphicon-bullhorn w-100'></span>" : ""}</div> <div class='${styleclass} col-sm-12 col-md-6 allAnnouncementStyler  padding-0 margin'><div class='announcement w-100 h-100' >` + "<div class='announcement-details'><label class='title-main'>" + title + "<label>-</label>" + createdOn + "</label>" + "<div class='announcement-description'><p>" + plainDescription + "</p></div>" + "</div></div>" + readMoreLabel + "</div></div>");
+
+        return myHTML
+
+    },
+
+    htmlToText(html) {
+        var temp = document.createElement('div');
+        temp.innerHTML = !!html ? html : '';
+        let text = !!temp.textContent ? temp.textContent : '';
+        return text.replaceAll(/\\n/g, " ").replaceAll(/\\r/g, " ");
+    },
+
+    displayAllAnnouncements() {
+        var styleclass = "";
+
+        if (this.announcements.length > 0) {
+            var htmlStringPopup = "";
+            for (i = this.index; (i < this.index + this.announcements.length) && (i < this.announcements.length); i++) {
+                htmlStringPopup += this.generateAnnouncementHtmlPopup(this.announcements[i], i, styleclass);
+            }
+        } else {
+            var htmlStringPopup = $("<label class='empty-container'>No Announcements to display</lable>");
+        }
+        $("#displayAllAnnouncements").html(htmlStringPopup);
+        var title = "<div data-target='#allAnnouncements' onclick='displayAnnouncement.getAllAnnouncements()'>See all</div>"
+
+        $("#showAllAnnouncements").html(title);
+
+    },
+
+    getAllAnnouncements() {
+        $("body").addClass("overflow-hidden");
+        $("#allAnnouncements").addClass("showannouncement-details");
+    },
+
+    closeModalElement() {
+        $("#myAnnouncement").removeClass("showannouncement-details");
+        $("body").removeClass("overflow-hidden");
+    },
+
+    closeModalElementPopup() {
+        $("#myAnnouncement").removeClass("showannouncement-details");
+    },
+
+    closeAnnouncementElement() {
+        $("body").removeClass("overflow-hidden");
+        $("#allAnnouncements").removeClass("showannouncement-details");
+    },
+
+    showAnnouncemnet() {
+        $("#displayAllAnnouncements").addClass("showannouncement-details");
+    }
+};
+
+var portalManagement = {
+    displayPortals(portals) {
+        portals.forEach(function (portal) {
+            var htmlString = $("<div class='panel-group'></div>");
+            htmlString.append("<div><h4><a data-toggle='collapse' href='#" + portal.Name + "'>" + portal.PortalDisplayName + "</a></h4></div>");
+
+            var projectLinks = "";
+            portal.Project.forEach(function (project) {
+                var thumbnail = "<img src='" + project.ImageURL + "' style='width:80%'><div class='caption'><label class='project-name'>" + project.ProjectName + "</label></div>";
+                var projectLink = "<div class='col-lg-4 col-md-4 col-sm-6'><div class=''><a href='" + project.NavigationURL + "'>" + thumbnail + "</a></div></div>";
+                projectLinks = projectLinks + projectLink;
+            });
+
+            var panelBody = $("<div id='" + portal.Name + "' class='panel-collapse collapse'><div class='panel-body'><div class='row'>" + projectLinks + "</div></div></div>");
+            htmlString.append(panelBody);
+            $("#panelContainer").append(htmlString);
+        })
+    },
+}
+
+$('.closeallannouncements').click(function () {
+    $("#displayAllAnnouncements").scrollTop(0);
+    displayAnnouncement.closeAnnouncementElement();
+});
+
+$('#announcement .announcement')
